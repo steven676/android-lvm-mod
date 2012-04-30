@@ -1,0 +1,299 @@
+MODIFYING YOUR ROM TO USE LVM2
+
+In order to create a ROM using LVM logical volumes, you need the
+following:
+
+* A boot image (kernel + ramdisk) which includes the LVM tools and is
+  configured to probe for, set up, and use LVM volumes on boot.
+* A recovery image which includes the LVM tools, is configured to probe
+  for and set up LVM volumes on boot, and knows which LVM logical
+  volumes correspond to which partitions.
+* (Optional, but highly recommended) A script to create LVM logical
+  volumes which can be used when flashing your ROM.
+
+Your device should have internal storage which presents a standard disk
+interface, such as an eMMC chip, other flash behind a flash translation
+layer (FTL), or a hard disk.  Flash which is NOT behind an FTL (MTD
+devices) is not (directly) supported.  (You may have some luck
+formatting those devices with ubifs or jffs2, creating disk images on
+those filesystems, and using the loopback device, but performance and
+data safety may be issues.)
+
+
+Background Information
+
+The Linux Logical Volume Manager (LVM) is a set of tools which allows
+you to create virtual disks ("logical volumes", "LVs") backed by a set
+of real storage devices ("physical volumes", "PVs") organized into
+"volume groups" ("VGs").  Using LVM, you can:
+
+* Create logical volumes which are larger than any of the individual
+  physical volumes available on your device's real storage.
+* Create an arbitrary number of logical volumes of arbitrary size,
+  regardless of the number of physical volumes or partitions available
+  on your real storage devices.  You could, for example, add a dedicated
+  swap partition, or create a separate /system and /data for a dual-boot
+  setup.
+* Take a snapshot of a logical volume -- a copy of the LV which only
+  stores differences between it and the original.  You could, for
+  example, take a snapshot of the external storage LV and export it via
+  USB mass storage to a computer, without needing to unmount the LV from
+  your device.
+* Grow or shrink logical volumes without unmounting the file system
+  ("online resize", requires filesystem support)
+
+
+Step 1: Gathering information
+
+We need to know the following before we can proceed:
+
+* What devices are available for use as LVM physical volumes?  In
+  principle, anything under /dev/block is a candidate, though in
+  practice, there are some considerations:
+
+    - mtdblock* devices should not be used.  These consist of an MTD
+      device with a primitive block layer on top.  The block layer does
+      not perform wear leveling and cannot guarantee the integrity of
+      your data if the system crashes in the middle of a write operation.
+    - You cannot use a boot partition (a partition from where the
+      board's bootloader loads a secondary bootloader or kernel) as a PV
+      -- otherwise your device will fail to boot (and, depending on your
+      device, perhaps even brick it).  Similarly, it is extremely unwise
+      to use a recovery partition as a PV.
+    - If you're using a partition of a drive (mmcblkXp[1-8], sdX[1-8]), you
+      cannot also use the whole-drive device (mmcblkX, sdX).
+
+  The partitions used for /system, /data, and (if your device has
+  internal "external" storage) /sdcard are usually good candidates for
+  PVs.  If you're not sure, stick to these.
+
+* If you're using a flash device as a PV, what's the device's eraseblock
+  size?  Aligning the LVM data structures and filesystems to the
+  eraseblock size is critical for performance and flash lifetime.  If
+  you don't have the specification offhand, you can use Arnd Bergmann's
+  excellent flashbench tool
+      git://git.linaro.org/people/arnd/flashbench.git
+  to determine your flash chip's eraseblock size.  See
+      http://lwn.net/Articles/428584/
+  and
+      https://wiki.linaro.org/WorkingGroups/Kernel/Projects/FlashCardSurvey
+  for more information on this topic.
+
+* How many LVs do you want to create?  At a minimum, you probably want
+  LVs for /system and /data; other possibilities include "external"
+  storage (/sdcard), /cache, and swap partitions.
+
+
+Step 2: Configuring LVM
+
+Under lvm-bin/etc, you will find a sample configuration file lvm.conf.
+Modify this file to suit your needs; the parts you need to pay attention
+to are marked with "ANDROID" in the comments.  In particular, you need
+to make sure the "filter" setting covers all of the block devices you
+intend to use as PVs, and that the "default_data_alignment" is suitable
+for your flash device's eraseblock size.
+
+
+Step 3: Creating a modified recovery
+
+Add the LVM tools (the contents of lvm-bin/) to /lvm in your recovery's
+ramdisk.
+
+Then, modify the /init.rc to probe for and activate LVM on startup.  You
+will need to add two services:
+
+    # LVM services
+    # Scan for LVM physical volumes and set up volume groups
+    service lvm_vgscan /lvm/sbin/lvm vgscan --mknodes --ignorelockingfailure
+        disabled
+        oneshot
+
+    # Activate LVM logical volumes in found volume groups
+    service lvm_vgchange /lvm/sbin/lvm vgchange -aly --ignorelockingfailure
+        disabled
+        oneshot
+
+Then, somewhere in the "on boot" section of the init.rc, add the
+following:
+
+    # LVM: Wait for block devices to become available, then set up LVM
+    # volumes
+        wait /dev/block/pv_block_dev	# Replace with actual dev name
+        start lvm_vgscan
+        start lvm_vgchange
+
+Finally, modify /etc/recovery.fstab to teach the recovery about the LVM
+logical volumes.  Logical volume devices are named
+    /dev/volume_group_name/logical_volume_name
+so, if you intend to create a volume group named "lvpool" and a logical
+volume called "system" in this volume group, the device file will be
+    /dev/lvpool/system
+Assuming you will be using this LV as your /system partition, you'd
+modify /etc/recovery.fstab so that the entry for /system reads as
+follows:
+
+    # mountpoint fstype device
+    /system         ext4            /dev/lvpool/system
+
+(replacing "ext4" with the appropriate filesystem for your device).
+
+Example files for ClockworkMod Recovery 5.0.2.0 and the stock ICS IMM76D
+recovery for crespo (Nexus S) are available in devices/crespo in the
+source tree.
+
+
+Step 4: Creating LVM volumes on the device
+
+Flash your modified recovery to your device and boot into the recovery.
+Connect your device to your computer via USB and use adb shell to access
+the command line.
+
+From the shell, do the following (# represents your prompt):
+
+* Create LVM physical volumes on the devices you identified in step 1
+  (WARNING WARNING WARNING: THIS WILL ERASE EVERYTHING ON THESE
+  DEVICES!):
+
+    # /lvm/sbin/lvm pvcreate /dev/block/pv_dev_1 /dev/block/pv_dev_2 ...
+
+* Create a volume group using the PVs (replace "lvpool" with the name of
+  your choice if you want to rename your volume group):
+
+    # /lvm/sbin/lvm vgcreate lvpool /dev/block/pv_dev_1 /dev/block/pv_dev_2 ...
+
+* Create logical volumes in the volume group:
+
+    # /lvm/sbin/lvm lvcreate -L [size] -n [name] lvpool
+
+  Replace [name] with the name of your logical volume and "lvpool" with
+  the name of your volume group.  [size] can be specified in terms of
+  megabytes or gigabytes using the appropriate suffix ("512M", "4G").
+
+Make a note of the commands you use to create your LVM setup; you will
+need to place these into the script users use when first flashing your
+ROM.
+
+You can find out how much free space you have in your VG with
+
+    # /lvm/sbin/lvm vgs
+
+Similarly, you can display the logical volumes you've created with
+
+    # /lvm/sbin/lvm lvs
+
+and show the underlying PVs with
+
+    # /lvm/sbin/lvm pvs
+
+Reboot into the recovery again.  You should now be able to format the
+LVs with filesystems and place a ROM onto them.
+
+
+Step 5: Creating a modified boot image
+
+Again, add the LVM tools (the contents of lvm-bin/) to /lvm in your
+boot image's ramdisk.
+
+Then, modify the /init.device.rc to probe for and activate LVM on
+startup.  You will need to add two services:
+
+    # LVM services
+    # Scan for LVM physical volumes and set up volume groups
+    service lvm_vgscan /lvm/sbin/lvm vgscan --mknodes --ignorelockingfailure
+        disabled
+        oneshot
+
+    # Activate LVM logical volumes in found volume groups
+    service lvm_vgchange /lvm/sbin/lvm vgchange -aly --ignorelockingfailure
+        disabled
+        oneshot
+
+Then, in the "on fs" section of the init.device.rc, before the "mount"
+commands for /system and /data, add the following:
+
+    # LVM: Wait for block devices to become available, then set up LVM
+    # volumes
+        wait /dev/block/pv_block_dev	# Replace with actual dev name
+        start lvm_vgscan
+        start lvm_vgchange
+
+Modify all the mount commands in the file as necessary, so that they use
+the appropriate LVM logical volumes.  You may wish to ensure "wait" is
+one of the options to mount, so that the system will wait for the LVs to
+become available.
+
+If you will have "external" storage on an LV, you will also need to do
+the following:
+
+Add the following service to /init.device.rc (replacing
+/dev/lvpool/media with the appropriate block device for your external
+storage LV):
+
+    # Configure vold to use an LVM block device as SD card storage
+    service vold_set_sdcard /lvm/sbin/vold-set-sdcard /dev/lvpool/media
+        disabled
+        oneshot
+
+Then, in the "on fs" section, AFTER the "export EXTERNAL_STORAGE
+/mnt/sdcard" command, add the following:
+
+    # LVM: Configure vold to use the appropriate LVM partition for the SD
+    # card
+        start vold_set_sdcard
+
+Finally, in the "on post-fs" section, BEFORE the "setprop
+vold.post_fs_data_done 1" command, add the following:
+
+    # LVM: Wait for vold configuration to finish before allowing vold to run
+        wait /dev/.vold_configured
+
+Example files for the stock ICS IMM76D boot image for crespo (Nexus S)
+are available in devices/crespo in the source tree.
+
+You should now be able to flash your ROM and modified boot image to your
+LVM-enabled device and boot into Android off LVM.
+
+
+Step 6: Creating an LVM setup script
+
+It's highly recommended you do this -- otherwise everyone who wants to
+install your ROM on LVM will have to set up their LVM partitions
+themselves.  Here's an example:
+
+    #!/sbin/sh
+    # replace the above line with the path to your recovery's shell
+
+    # don't create LVM partitions if they already exist
+    # replace /dev/lvpool/system with an appropriate LV device from your
+    # setup
+    [ -e /dev/lvpool/system ] && exit 0
+
+    # Replace the commands below with the appropriate ones for your
+    # device from step 4
+
+    # create physical volumes
+    /lvm/sbin/lvm pvcreate /dev/block/pv_dev_1 /dev/block/pv_dev_2 ...
+
+    # create the volume group
+    /lvm/sbin/lvm vgcreate lvpool /dev/block/pv_dev_1 /dev/block/pv_dev_2 ...
+
+    # create logical volumes
+    /lvm/sbin/lvm lvcreate -L 512M -n system lvpool
+    /lvm/sbin/lvm lvcreate -L 1G -n userdata lvpool
+    [...]
+
+    exit 0
+
+Run this from your ROM's updater-script before formatting partitions and
+installing the ROM; it will create the LVM setup the first time the user
+flashes the zip, but not on subsequent flashes.  (Setting up LVM WILL
+ERASE ALL DATA ON THE DEVICE; make sure to remind your users to back up
+their data!)  You will also need to modify the updater-script to use the
+appropriate LV devices when formatting partitions and unpacking files.
+
+
+Removing LVM From A Device
+
+Flash a standard (non-LVM) recovery, do a full data wipe (factory
+reset), format all the partitions, and then flash a standard (non-LVM)
+ROM to your device.  (This will of course wipe all the data.)

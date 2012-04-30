@@ -1,0 +1,59 @@
+BUILDING LVM2 FOR USE ON ANDROID
+
+The LVM source was written for standard glibc-based GNU/Linux systems,
+and doesn't build agains Android libc.  We could invest time and effort
+into porting it to Android, but it's easier to just statically link the
+LVM binary against glibc (we already have to use a statically linked
+binary, since the boot image doesn't ship shared libraries).
+
+To build LVM with glibc, you will need either an actual GNU/Linux ARM
+system with a development environment (gcc, make, and glibc header
+files) set up, or a GNU/Linux ARM cross-compiler toolchain (untested).
+The binaries in lvm-bin/ were compiled in a Debian squeeze chroot
+running on a Nexus S (though any recent Linux distribution and any
+device should do).  The Linaro prebuilt GCC toolchain and the
+CodeSourcery CodeBench Lite toolchain for ARM Linux should work; the
+Android NDK toolchain will not.
+
+Once you have your development environment set up, do the following to
+compile LVM:
+
+1. Grab the LVM source.  If it's not already in this tree, you can fetch
+it via git ($ is your prompt):
+
+    $ git submodule init
+    $ git submodule update
+
+2. Configure the LVM source:
+
+    $ cd lvm-src/
+    $ ./configure --prefix=/lvm --enable-static_link --disable-readline \
+      --disable-selinux --with-pool=none --with-cluster=none \
+      --with-confdir=/lvm/etc --with-default-run-dir=/lvm/run \
+      --with-default-system-dir=/lvm/etc/lvm \
+      --with-default-locking-dir=/lvm/lock
+
+(Explanation: --prefix, --with-confdir, --with-default-run-dir,
+--with-defauult-system-dir, --with-default-locking-dir tell LVM where to
+find its pieces.  --enable-static_link enables the building of a
+statically linked binary.  --disable-readline --disable-selinux
+--with-pool=none --with-cluster=none disable features we don't need.)
+
+For a cross toolchain, you will probably need to do the following
+instead:
+
+    $ export CC=arm-linux-gnu-gcc	# replace with your cross compiler
+    $ ./configure --host=arm-linux-gnu \
+      --prefix=/lvm --enable-static_link --disable-readline \
+      --disable-selinux --with-pool=none --with-cluster=none \
+      --with-confdir=/lvm/etc --with-default-run-dir=/lvm/run \
+      --with-default-system-dir=/lvm/etc/lvm \
+      --with-default-locking-dir=/lvm/lock
+
+3. Build the software:
+
+    $ make
+
+The resulting statically linked unstripped LVM binary will be located in
+tools/lvm.static in the LVM source tree, and an example configuration
+file is located in doc/example.conf.

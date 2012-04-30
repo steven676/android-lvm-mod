@@ -1,0 +1,30 @@
+This repository contains components and sample configuration files for
+using LVM2 on Android.
+
+What's in the tree:
+
+lvm-bin/
+Prebuilt LVM2 binary, support scripts, and sample lvm.conf file.
+
+lvm-src/
+LVM2 source code. (If this directory is empty, do
+	git submodule init
+	git submodule update
+to fetch the source.)
+
+devices/
+Sample lvm.conf and init.rc scripts for particular devices.
+
+HOWTO-MOD
+Information on how to modify a ROM and recovery for a device to use
+LVM2.
+
+HOWTO-BUILD
+Information on how to build the LVM2 source for use on Android.
+
+LICENSE
+Licensing information for the components.
+
+
+Questions or comments can be addressed to 
+<steven+android [AT] steven676.net>.
