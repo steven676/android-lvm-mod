@@ -1,0 +1,3 @@
+[submodule "lvm-src"]
+	path = lvm-src
+	url = git://github.com/steven676/lvm2.git
