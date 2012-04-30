@@ -6,6 +6,10 @@
 # Ensure EXTERNAL_STORAGE is set to SD card mount point (your init.*.rc
 # should already be doing this)
 
+# Note that this script requires that the [ (test) command be available.
+# [ is a shell builtin on Honeycomb and later; on older devices, you will
+# need BusyBox tools or similar available in the PATH.
+
 VOLD_CONFIG_NEW=/dev/vold.fstab
 VOLD_CONFIG=/system/etc/vold.fstab
 
