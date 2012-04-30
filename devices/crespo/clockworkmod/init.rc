@@ -1,0 +1,58 @@
+on early-init
+    start ueventd
+
+on init
+    export PATH /sbin
+    export ANDROID_ROOT /system
+    export ANDROID_DATA /data
+    export EXTERNAL_STORAGE /sdcard
+
+    symlink /system/etc /etc
+
+    mkdir /boot
+    mkdir /sdcard
+    mkdir /sd-ext
+    mkdir /datadata
+    mkdir /emmc
+    mkdir /system
+    mkdir /data
+    mkdir /cache
+    mount /tmp /tmp tmpfs
+
+on boot
+
+    ifup lo
+    hostname localhost
+    domainname localdomain
+
+    class_start default
+
+# LVM: Wait for mmc block devices to become available, then set up LVM volumes
+    wait /dev/block/mmcblk0
+    start lvm_vgscan
+    start lvm_vgchange
+
+# LVM services
+# Scan for LVM physical volumes and set up volume groups
+service lvm_vgscan /lvm/sbin/lvm vgscan --mknodes --ignorelockingfailure
+    disabled
+    oneshot
+
+# Activate LVM logical volumes in found volume groups
+service lvm_vgchange /lvm/sbin/lvm vgchange -aly --ignorelockingfailure
+    disabled
+    oneshot
+
+service ueventd /sbin/ueventd
+    critical
+
+service recovery /sbin/recovery
+
+service adbd /sbin/adbd recovery
+    disabled
+
+on property:persist.service.adb.enable=1
+    start adbd
+
+on property:persist.service.adb.enable=0
+    stop adbd

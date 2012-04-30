@@ -1,0 +1,25 @@
+--- a/init.rc	2012-04-29 18:14:21.000000000 -0700
++++ b/init.rc	2012-04-29 18:15:12.000000000 -0700
+@@ -23,6 +23,22 @@
+ 
+     class_start default
+ 
++# LVM: Wait for mmc block devices to become available, then set up LVM volumes
++    wait /dev/block/mmcblk0
++    start lvm_vgscan
++    start lvm_vgchange
++
++# LVM services
++# Scan for LVM physical volumes and set up volume groups
++service lvm_vgscan /lvm/sbin/lvm vgscan --mknodes --ignorelockingfailure
++    disabled
++    oneshot
++
++# Activate LVM logical volumes in found volume groups
++service lvm_vgchange /lvm/sbin/lvm vgchange -aly --ignorelockingfailure
++    disabled
++    oneshot
++
+ service ueventd /sbin/ueventd
+     critical
+ 
