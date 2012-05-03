@@ -220,7 +220,8 @@ commands for /system and /data, add the following:
 Modify all the mount commands in the file as necessary, so that they use
 the appropriate LVM logical volumes.  You may wish to ensure "wait" is
 one of the options to mount, so that the system will wait for the LVs to
-become available.
+become available.  Also, replace any other references to the old
+partitions' block devices with the appropriate LVM logical volumes.
 
 If you will have "external" storage on an LV, you will also need to do
 the following:
