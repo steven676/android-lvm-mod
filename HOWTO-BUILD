@@ -8,12 +8,25 @@ binary, since the boot image doesn't ship shared libraries).
 
 To build LVM with glibc, you will need either an actual GNU/Linux ARM
 system with a development environment (gcc, make, and glibc header
-files) set up, or a GNU/Linux ARM cross-compiler toolchain (untested).
-The binaries in lvm-bin/ were compiled in a Debian squeeze chroot
-running on a Nexus S (though any recent Linux distribution and any
-device should do).  The Linaro prebuilt GCC toolchain and the
-CodeSourcery CodeBench Lite toolchain for ARM Linux should work; the
-Android NDK toolchain will not.
+files) set up, or a GNU/Linux ARM cross-compiler environment.
+
+For native compilation, any recent Linux distribution and any ARM device
+should do.  If you don't have something like a BeagleBoard or
+SheevaPlug, you can install a GNU/Linux chroot on any rooted Android
+device.  You'll need the development tools for your chosen distribution
+(install metapackage "build-essential" on Debian or Ubuntu, or package
+group "Development Tools" on Fedora-derived distros).
+
+For cross compilation, you'll need a Linux box, a cross-compiler
+toolchain for GNU/Linux ARM EABI, and (for now) the qemu-arm user mode
+emulator (to keep the configure script from getting confused).  The
+Linaro prebuilt GCC toolchain and the CodeSourcery CodeBench Lite
+toolchain for ARM Linux should work; the Android NDK toolchain will not.
+(Debian users can install the Emdebian cross toolchain from
+http://www.emdebian.org/crosstools.html).
+
+The binaries in lvm-bin/ were compiled with an Emdebian squeeze/armel
+cross compilation toolchain running on a Debian squeeze/amd64 machine.
 
 Once you have your development environment set up, do the following to
 compile LVM:
@@ -29,26 +42,34 @@ it via git ($ is your prompt):
     $ cd lvm-src/
     $ ./configure --prefix=/lvm --enable-static_link --disable-readline \
       --disable-selinux --with-pool=none --with-cluster=none \
-      --with-confdir=/lvm/etc --with-default-run-dir=/lvm/run \
-      --with-default-system-dir=/lvm/etc/lvm \
-      --with-default-locking-dir=/lvm/lock
+      --with-confdir=/lvm/etc --with-default-run-dir=/data/lvm/run \
+      --with-default-system-dir=/lvm/etc \
+      --with-default-locking-dir=/data/lvm/lock
 
 (Explanation: --prefix, --with-confdir, --with-default-run-dir,
---with-defauult-system-dir, --with-default-locking-dir tell LVM where to
+--with-default-system-dir, --with-default-locking-dir tell LVM where to
 find its pieces.  --enable-static_link enables the building of a
 statically linked binary.  --disable-readline --disable-selinux
 --with-pool=none --with-cluster=none disable features we don't need.)
 
-For a cross toolchain, you will probably need to do the following
-instead:
+To cross-compile, you first need to set up your system so that ARM
+binaries will automatically be emulated using qemu-arm.  Your
+distribution may already have set this up for you (e.g. on Debian with
+the qemu-user-static and binfmt-support packages); if not, make sure
+your kernel has CONFIG_BINFMT_MISC enabled, and then do
 
-    $ export CC=arm-linux-gnu-gcc	# replace with your cross compiler
-    $ ./configure --host=arm-linux-gnu \
+    # mount -t binfmt_misc none /proc/sys/fs/binfmt_misc
+    # echo ":arm-qemu:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x28\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/qemu-arm:" > /proc/sys/fs/binfmt_misc/register
+
+as root.  Then, when running configure, do
+
+    $ export CC=arm-linux-gnueabi-gcc	# replace with your cross compiler
+    $ ./configure --host=arm-linux-gnueabi \
       --prefix=/lvm --enable-static_link --disable-readline \
       --disable-selinux --with-pool=none --with-cluster=none \
-      --with-confdir=/lvm/etc --with-default-run-dir=/lvm/run \
-      --with-default-system-dir=/lvm/etc/lvm \
-      --with-default-locking-dir=/lvm/lock
+      --with-confdir=/lvm/etc --with-default-run-dir=/data/lvm/run \
+      --with-default-system-dir=/lvm/etc \
+      --with-default-locking-dir=/data/lvm/lock
 
 3. Build the software:
 
