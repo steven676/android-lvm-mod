@@ -1,0 +1,44 @@
+--- a/init.tuna.rc	2012-12-25 04:58:20.000000000 -0800
++++ b/init.tuna.rc	2013-01-20 03:03:39.000000000 -0800
+@@ -53,6 +53,12 @@ on boot
+ 	write /sys/bus/usb/devices/usb2/power/autosuspend_delay_ms 0
+ 
+ on fs
++# LVM: Wait for block devices to become available, then set up LVM
++# volumes
++	wait /dev/block/mmcblk0
++	start lvm_vgscan
++	start lvm_vgchange
++
+ 	mkdir /factory 0775 radio radio
+ 	mount_all /fstab.tuna
+ 	setprop ro.crypto.fuse_sdcard true
+@@ -117,6 +123,17 @@ on property:persist.sys.tuna.off_mode=*
+ on property:ril.modem.lte.powercontrol=*
+ 	write /sys/bus/usb/devices/1-1/power/control ${ril.modem.lte.powercontrol}
+ 
++# LVM services
++# Scan for LVM physical volumes and set up volume groups
++service lvm_vgscan /lvm/sbin/lvm vgscan --mknodes --ignorelockingfailure
++    disabled
++    oneshot
++
++# Activate LVM logical volumes in found volume groups
++service lvm_vgchange /lvm/sbin/lvm vgchange -aly --ignorelockingfailure
++    disabled
++    oneshot
++
+ service fRom /system/bin/fRom \
+ 	-x /data/misc/camera/R5_MVEN003_LD2_ND0_IR0_SH0_FL1_SVEN003_DCCID1044 \
+ 	-d /dev/mtd/mtd0
+@@ -132,9 +149,7 @@ service pvrsrvctl /vendor/bin/pvrsrvctl
+ 	oneshot
+ 
+ # create filesystems if necessary
+-service setup_fs /system/bin/setup_fs \
+-		/dev/block/platform/omap/omap_hsmmc.0/by-name/cache \
+-		/dev/block/platform/omap/omap_hsmmc.0/by-name/userdata
++service setup_fs /system/bin/setup_fs /dev/lvpool/cache /dev/lvpool/userdata
+         class core
+         user root
+         group root
