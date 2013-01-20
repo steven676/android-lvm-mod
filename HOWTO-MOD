@@ -73,7 +73,10 @@ We need to know the following before we can proceed:
   you don't have the specification offhand, you can use Arnd Bergmann's
   excellent flashbench tool
       git://git.linaro.org/people/arnd/flashbench.git
-  to determine your flash chip's eraseblock size.  See
+  to determine your flash chip's eraseblock size.  For an eMMC or SD device,
+  the card will report its own erase block size directly (though be aware
+  that some devices lie) in /sys/block/mmcblkX/device/preferred_erase_size
+  (replace X with the number of your MMC device).  See
       http://lwn.net/Articles/428584/
   and
       https://wiki.linaro.org/WorkingGroups/Kernel/Projects/FlashCardSurvey
