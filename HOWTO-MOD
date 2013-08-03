@@ -229,6 +229,13 @@ partitions' block devices with the appropriate LVM logical volumes.
 If you will have "external" storage on an LV, you will also need to do
 the following:
 
+Choose the appropriate vold-set-sdcard script to add to your LVM install.
+vold-set-sdcard.for-vold.fstab is for use with Android 4.2 and earlier,
+while Android 4.3 and later use vold-set-sdcard.for-fstab.board.  (If on
+4.3 or later, you'll also need to edit the script so that it can find your
+fstab file -- the name is typically /fstab.BOARDNAME, where BOARDNAME is
+the name of your board).
+
 Add the following service to /init.device.rc (replacing
 /dev/lvpool/media with the appropriate block device for your external
 storage LV):
