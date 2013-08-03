@@ -2,11 +2,10 @@ The lvm binary under /lvm/sbin/lvm is released under the terms of the
 GNU General Public License, version 2 or later.  A copy of this license
 is included in the source tree as GPL-2.
 
-LVM sources are available under the terms of either the GNU General
-Public License, version 2 or later, except for library components which
-are distributed under the GNU Library General Public License, version
-2.1 or later.  A copy of the LGPL is included in the source tree as
-LGPL-2.1.
+LVM sources are available under the terms of the GNU General Public
+License, version 2 or later, except for library components which are
+distributed under the GNU Library General Public License, version 2.1 or
+later.  A copy of the LGPL is included in the source tree as LGPL-2.1.
 
 Android-derived parts (principally init.rc files) are available under
 the terms of the Apache License, version 2.0.  A copy of this license is
