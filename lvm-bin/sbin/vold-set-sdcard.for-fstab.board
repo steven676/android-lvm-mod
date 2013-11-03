@@ -2,15 +2,23 @@
 
 # vold-set-sdcard -- configure the volume manager daemon for the SD card device
 
-# Usage: vold-set-sdcard /dev/sdcard_block_dev
-# Ensure EXTERNAL_STORAGE is set to SD card mount point (your init.*.rc
-# should already be doing this)
+# Usage: vold-set-sdcard vold-tag /dev/sdcard_block_dev
+
+# The vold-tag for the volume is the string after voldmanaged= in its fstab
+# entry's flags, excluding the partition number (the part after the :).
+#
+# Example: the vold-tag for a volume with voldmanaged=sdcard:3 in fstab is
+# "sdcard".
 
 # Note that this script requires that the [ (test) command be available.
 # [ is a shell builtin on Honeycomb and later; on older devices, you will
 # need BusyBox tools or similar available in the PATH.
 
-VOLD_CONFIG_NEW=/dev/fstab.BOARD_PNAME
+# Note that this script requires that POSIX-style prefix- and suffix-removing
+# parameter expansion (${foo#prefix} and ${foo%%suffix}) be available in the
+# shell. 
+
+VOLD_CONFIG_NEW=/dev/fstab.BOARD_NAME
 VOLD_CONFIG=/fstab.BOARD_NAME
 
 LVM=/lvm/sbin/lvm
@@ -18,7 +26,10 @@ LVM=/lvm/sbin/lvm
 [ -f "$VOLD_CONFIG" ] || exit 0
 
 [ "$1" ] || exit 0
-SDCARD_BLOCK_DEV="$1"
+SDCARD_VOLD_TAG="$1"
+
+[ "$2" ] || exit 0
+SDCARD_BLOCK_DEV="$2"
 
 #MAJOR=$(echo $($LVM lvs -o lv_kernel_major --noheadings "$SDCARD_BLOCK_DEV"))
 MINOR=$(echo $($LVM lvs -o lv_kernel_minor --noheadings "$SDCARD_BLOCK_DEV"))
@@ -29,7 +40,9 @@ umask 022
 : > "$VOLD_CONFIG_NEW"
 exec < "$VOLD_CONFIG"
 while read sysfs_path mntpoint fstype mntflags fsmgrflags; do
-	if [ x"$mntpoint" = x"$EXTERNAL_STORAGE" ]; then
+	tmp="${fsmgrflags#*voldmanaged=}"
+	voldtag="${tmp%%:*}"
+	if [ x"$voldtag" = x"$SDCARD_VOLD_TAG" ]; then
 		sysfs_path="$SDCARD_SYSFS_PATH"
 	fi
 	echo "$sysfs_path $mntpoint $fstype $mntflags $fsmgrflags" >> "$VOLD_CONFIG_NEW"
